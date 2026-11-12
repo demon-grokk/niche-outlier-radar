@@ -1,0 +1,34 @@
+# Python virtual environment
+.venv/
+venv/
+ENV/
+env/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest / Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local databases & runtime data
+data/*.db
+data/*.sqlite
+data/*.sqlite3
+data/youtube_cookies.txt
+!data/.gitkeep
+
+# Environment variables & local secrets
+.env
+.env.*
+!.env.example
+
+# IDE & OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo

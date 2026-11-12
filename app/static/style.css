@@ -1,0 +1,31 @@
+/* YouTube Desktop Dark Theme Refinements */
+[x-cloak] { display: none !important; }
+
+/* Custom YouTube Dark Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #0f0f0f;
+}
+::-webkit-scrollbar-thumb {
+  background: #272727;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #3f3f3f;
+}
+
+/* Line clamp helpers */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Smooth YouTube Chip Bar transition */
+button {
+  user-select: none;
+}

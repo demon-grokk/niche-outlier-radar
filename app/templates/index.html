@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>YouTube Outlier Radar | High-Signal AI & Tech</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Roboto', 'Arial', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            yt: {
+              black: '#0f0f0f',
+              card: '#0f0f0f',
+              surface: '#212121',
+              hover: '#272727',
+              border: '#383838',
+              input: '#121212',
+              inputBorder: '#303030',
+              red: '#ff0000',
+              text: '#f1f1f1',
+              muted: '#aaaaaa',
+              chip: '#272727',
+              chipActive: '#f1f1f1'
+            }
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-yt-black text-yt-text min-h-screen antialiased flex flex-col font-sans selection:bg-red-600/30 selection:text-white" x-data="youtubeRadarApp()">
+
+  <!-- Fixed Top Navigation (Authentic YouTube Header) -->
+  <header class="sticky top-0 z-40 bg-yt-black/95 backdrop-blur-md border-b border-yt-border/40 px-4 h-14 flex items-center justify-between gap-4">
+    
+    <!-- Left: YouTube Logo & Branding -->
+    <div class="flex items-center gap-4 shrink-0">
+      <button class="p-2 hover:bg-yt-surface rounded-full transition text-yt-text hidden md:block">
+        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+      </button>
+      
+      <div class="flex items-center gap-1.5 cursor-pointer" @click="resetFilters()">
+        <div class="flex items-center">
+          <!-- Red YouTube Play Icon -->
+          <div class="w-7 h-5 bg-yt-red rounded-[6px] flex items-center justify-center shadow-sm">
+            <svg class="w-3.5 h-3.5 text-white ml-0.5 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          </div>
+          <span class="text-white font-bold text-lg tracking-tighter ml-1.5">YouTube</span>
+        </div>
+        <span class="text-[11px] font-mono uppercase tracking-wider px-2 py-0.5 rounded-full bg-yt-surface text-amber-400 border border-amber-500/30 font-semibold ml-1">Radar</span>
+      </div>
+    </div>
+
+    <!-- Center: YouTube Search Bar -->
+    <div class="flex-1 max-w-2xl mx-auto flex items-center justify-center px-2">
+      <div class="flex w-full max-w-lg items-center">
+        <div class="relative w-full">
+          <input 
+            type="text" 
+            x-model="searchQuery" 
+            @input.debounce.300ms="loadFeed()"
+            placeholder="Search AI agents, automations, dev tools, or creators..." 
+            class="w-full bg-yt-input border border-yt-inputBorder rounded-l-full px-4 py-2 text-sm text-yt-text placeholder-yt-muted focus:outline-none focus:border-blue-500">
+        </div>
+        <button 
+          @click="loadFeed()"
+          class="bg-yt-surface hover:bg-yt-hover border border-l-0 border-yt-inputBorder px-5 py-2 rounded-r-full text-yt-muted hover:text-white transition">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Right: Actions & Tools -->
+    <div class="flex items-center gap-2 shrink-0">
+      
+      <!-- Live Sync Indicator -->
+      <template x-if="syncState.is_running">
+        <div class="flex items-center gap-2 text-xs bg-red-950/60 text-red-300 border border-red-500/30 px-3 py-1.5 rounded-full animate-pulse font-mono">
+          <span class="w-2 h-2 rounded-full bg-yt-red animate-ping"></span>
+          <span class="hidden sm:inline" x-text="syncState.current_channel || 'Syncing...'"></span>
+        </div>
+      </template>
+
+      <!-- Sync Now -->
+      <button 
+        @click="triggerSync()" 
+        :disabled="syncState.is_running"
+        class="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-yt-surface hover:bg-yt-hover text-white transition disabled:opacity-50">
+        <svg class="w-4 h-4 text-yt-red" :class="{'animate-spin': syncState.is_running}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        <span class="hidden md:inline">Sync</span>
+      </button>
+
+      <!-- Raw Data Inspector -->
+      <button 
+        @click="showRawModal = true; loadRawData()" 
+        class="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-yt-surface hover:bg-yt-hover text-yt-text border border-yt-border/60 transition">
+        <svg class="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"/></svg>
+        <span class="hidden md:inline">DB Inspector</span>
+      </button>
+
+      <!-- Channels Catalog -->
+      <button 
+        @click="showChannelModal = true; loadChannels()" 
+        class="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-yt-surface hover:bg-yt-hover text-yt-text border border-yt-border/60 transition">
+        <span>Channels</span>
+        <span class="px-1.5 py-0.2 bg-yt-hover rounded-full text-[10px] text-amber-400" x-text="channels.length || 0"></span>
+      </button>
+
+    </div>
+  </header>
+
+  <!-- Sticky YouTube Chip Bar & Feed Controls -->
+  <div class="sticky top-14 z-30 bg-yt-black/95 backdrop-blur-md px-6 py-2.5 border-b border-yt-border/20 space-y-2">
+    
+    <!-- Row 1: Format Switcher & YouTube Category Chips -->
+    <div class="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none text-xs">
+      
+      <!-- Primary Format Switcher: Long-Form (Default) vs Shorts -->
+      <div class="flex items-center bg-yt-surface rounded-xl p-0.5 border border-yt-border/60 shrink-0 mr-1 text-xs">
+        <button 
+          @click="setVideoType('long')" 
+          :class="videoType === 'long' ? 'bg-white text-black font-bold shadow' : 'text-yt-muted hover:text-white'"
+          class="px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 text-xs font-semibold">
+          <span>🎬 Long-form</span>
+        </button>
+        <button 
+          @click="setVideoType('shorts')" 
+          :class="videoType === 'shorts' ? 'bg-red-600 text-white font-bold shadow' : 'text-yt-muted hover:text-white'"
+          class="px-3 py-1.5 rounded-lg transition flex items-center gap-1.5 text-xs font-semibold">
+          <span>⚡ Shorts</span>
+        </button>
+      </div>
+
+      <template x-for="cat in categories" :key="cat">
+        <button 
+          @click="selectedCategory = cat; loadFeed()"
+          :class="selectedCategory === cat ? 'bg-yt-text text-yt-black font-semibold' : 'bg-yt-chip text-yt-text hover:bg-yt-hover'"
+          class="px-3.5 py-1.5 rounded-lg whitespace-nowrap transition text-xs font-medium">
+          <span x-text="cat"></span>
+        </button>
+      </template>
+
+      <!-- Outlier Only Chip -->
+      <button 
+        @click="onlyOutliers = !onlyOutliers; loadFeed()"
+        :class="onlyOutliers ? 'bg-amber-400 text-black font-bold border-amber-300' : 'bg-yt-chip text-amber-400 border border-amber-500/30 hover:bg-yt-hover'"
+        class="px-3 py-1.5 rounded-lg whitespace-nowrap transition text-xs font-semibold flex items-center gap-1">
+        <span>🔥</span>
+        <span>Outliers Only</span>
+      </button>
+    </div>
+
+    <!-- Row 2: Strict Recency, Density & Sort Controls -->
+    <div class="flex flex-wrap items-center justify-between gap-3 text-xs text-yt-muted pt-1">
+      
+      <div class="flex flex-wrap items-center gap-3">
+        <!-- Recency Constraint Pill (7d vs 15d MAX) -->
+        <div class="flex items-center bg-yt-surface rounded-lg p-0.5 border border-yt-border/40 text-[11px]">
+          <span class="px-2 text-yt-muted font-medium">Recency:</span>
+          <button 
+            @click="daysBack = 7; loadFeed()" 
+            :class="daysBack === 7 ? 'bg-yt-text text-black font-bold' : 'text-yt-muted hover:text-white'"
+            class="px-2.5 py-1 rounded-md transition">Last 7 Days</button>
+          <button 
+            @click="daysBack = 15; loadFeed()" 
+            :class="daysBack === 15 ? 'bg-yt-text text-black font-bold' : 'text-yt-muted hover:text-white'"
+            class="px-2.5 py-1 rounded-md transition">Last 15 Days (Max)</button>
+        </div>
+
+        <!-- Sort Order (Smart Trending vs Latest vs Top Outliers) -->
+        <div class="flex items-center bg-yt-surface rounded-lg p-0.5 border border-yt-border/40 text-[11px]">
+          <span class="px-2 text-yt-muted font-medium">Sort:</span>
+          <button 
+            @click="sortBy = 'smart_signal'; loadFeed()" 
+            :class="sortBy === 'smart_signal' ? 'bg-yt-text text-black font-bold' : 'text-yt-muted hover:text-white'"
+            class="px-2.5 py-1 rounded-md transition">⚡ Trending</button>
+          <button 
+            @click="sortBy = 'date_desc'; loadFeed()" 
+            :class="sortBy === 'date_desc' ? 'bg-yt-text text-black font-bold' : 'text-yt-muted hover:text-white'"
+            class="px-2.5 py-1 rounded-md transition">Latest First</button>
+          <button 
+            @click="sortBy = 'outlier_desc'; loadFeed()" 
+            :class="sortBy === 'outlier_desc' ? 'bg-yt-text text-black font-bold' : 'text-yt-muted hover:text-white'"
+            class="px-2.5 py-1 rounded-md transition">Top Outliers</button>
+        </div>
+
+        <!-- Aggressive Creator Discovery (A, B, C) -->
+        <button 
+          @click="triggerCatalogDiscovery()" 
+          :disabled="discoveryScanning"
+          class="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1 rounded-lg bg-yt-surface hover:bg-yt-hover text-amber-400 border border-amber-500/30 transition">
+          <span :class="{'animate-spin': discoveryScanning}">⚡</span>
+          <span>Grow Catalog (A/B/C)</span>
+        </button>
+      </div>
+
+      <!-- Feed Count & Anti-Doomscroll Guarantee -->
+      <div class="flex items-center gap-2 text-[11px] font-mono">
+        <span class="text-white font-bold" x-text="`${videos.length} Videos Loaded`"></span>
+        <span>•</span>
+        <span class="text-emerald-400">0 Algorithmic Rabbitholes</span>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Main Feed: 4-Column YouTube Video Grid -->
+  <main class="max-w-[1800px] mx-auto px-6 py-6 flex-1 w-full">
+
+    <!-- Loading Shimmer -->
+    <template x-if="loading && videos.length === 0">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8">
+        <template x-for="i in 8" :key="i">
+          <div class="animate-pulse space-y-3">
+            <div class="aspect-video bg-yt-surface rounded-2xl"></div>
+            <div class="flex gap-3">
+              <div class="w-9 h-9 rounded-full bg-yt-surface shrink-0"></div>
+              <div class="flex-1 space-y-2">
+                <div class="h-4 bg-yt-surface rounded w-5/6"></div>
+                <div class="h-3 bg-yt-surface rounded w-1/2"></div>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </template>
+
+    <!-- YouTube-style Creator Channel Result Banner -->
+    <template x-if="matchedChannels && matchedChannels.length > 0">
+      <div class="mb-8 space-y-4">
+        <template x-for="ch in matchedChannels" :key="ch.channel_id">
+          <div class="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-6 p-6 bg-yt-surface/70 hover:bg-yt-surface border border-yt-border/60 rounded-2xl transition shadow-lg">
+            <div class="flex flex-col sm:flex-row items-center gap-5 text-center sm:text-left">
+              <!-- Channel Avatar -->
+              <div class="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-yt-hover overflow-hidden border-2 border-yt-border shrink-0 flex items-center justify-center">
+                <template x-if="ch.avatar_url">
+                  <img :src="ch.avatar_url" class="w-full h-full object-cover" onerror="this.style.display='none'">
+                </template>
+                <span class="text-2xl font-bold text-amber-400" x-text="ch.name ? ch.name.slice(0, 2).toUpperCase() : 'YT'"></span>
+              </div>
+              <!-- Channel Details -->
+              <div class="space-y-1.5">
+                <div class="flex items-center gap-2 justify-center sm:justify-start">
+                  <h2 class="text-xl font-bold text-white hover:text-red-400 cursor-pointer transition" @click="filterByCreator(ch.name)" x-text="ch.name"></h2>
+                  <svg class="w-4 h-4 text-yt-muted fill-current" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zM9.8 17.3l-4.2-4.1 1.4-1.4 2.8 2.7 7.4-7.4 1.4 1.4-8.8 8.8z"/></svg>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 text-xs text-yt-muted justify-center sm:justify-start">
+                  <span class="font-mono text-blue-400 font-medium" x-text="ch.handle"></span>
+                  <span>•</span>
+                  <span class="px-2.5 py-0.5 rounded-full bg-yt-chip text-[11px] text-white font-medium border border-white/10" x-text="ch.category || 'Tech Discovery'"></span>
+                  <span>•</span>
+                  <span class="px-2 py-0.5 rounded-md bg-yt-surface text-[10px] text-emerald-400 font-mono font-bold border border-white/10" x-text="ch.country || 'US'"></span>
+                  <span>•</span>
+                  <span class="text-yt-text font-mono" x-text="`${formatNumber(ch.video_count || 0)} videos in radar`"></span>
+                  <span>•</span>
+                  <span class="text-amber-400 font-mono font-semibold" x-text="`${formatNumber(ch.median_views || 15000)} median views`"></span>
+                </div>
+                <p class="text-xs text-yt-muted pt-0.5">Verified creator tracked for viral outlier videos • Click to filter videos</p>
+              </div>
+            </div>
+            <!-- Action Buttons -->
+            <div class="flex items-center gap-3 shrink-0">
+              <button 
+                @click="filterByCreator(ch.name)" 
+                class="px-4 py-2 rounded-full bg-yt-hover hover:bg-yt-border text-white font-semibold text-xs transition border border-yt-border flex items-center gap-1.5">
+                <span>View Creator Videos</span>
+              </button>
+              <a 
+                :href="ch.url || `https://www.youtube.com/${ch.handle}`" 
+                target="_blank" 
+                rel="noopener noreferrer" 
+                class="px-4 py-2 rounded-full bg-white hover:bg-gray-200 text-black font-semibold text-xs transition flex items-center gap-1.5">
+                <span>YouTube Channel</span>
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+              </a>
+            </div>
+          </div>
+        </template>
+        <div class="border-b border-yt-border/40 my-4"></div>
+      </div>
+    </template>
+
+    <!-- Empty State -->
+    <template x-if="!loading && videos.length === 0">
+      <div class="text-center py-16 px-4 space-y-4">
+        <div class="w-16 h-16 mx-auto rounded-full bg-yt-surface border border-yt-border flex items-center justify-center text-2xl text-yt-muted">
+          🔍
+        </div>
+        <h3 class="text-base font-bold text-white">No videos found</h3>
+        <p class="text-xs text-yt-muted max-w-sm mx-auto">No videos matched your filter criteria or search query within the specified recency window.</p>
+        <button 
+          @click="resetFilters()" 
+          class="px-5 py-2 rounded-full bg-yt-surface hover:bg-yt-hover text-white text-xs font-semibold transition border border-yt-border">
+          Reset All Filters
+        </button>
+      </div>
+    </template>
+
+    <!-- Video Cards Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8" x-show="videos.length > 0">
+      <template x-for="v in videos" :key="v.video_id">
+        <div class="flex flex-col group cursor-pointer" @click="openBlueprint(v)">
+          
+          <!-- Thumbnail Wrapper -->
+          <div class="relative aspect-video w-full rounded-2xl overflow-hidden bg-yt-surface group-hover:rounded-none transition-all duration-200">
+            <img 
+              :src="v.thumbnail_url" 
+              :alt="v.title" 
+              class="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+              loading="lazy">
+            
+            <!-- Duration / Shorts Badge -->
+            <template x-if="v.is_short">
+              <div class="absolute bottom-2 right-2 bg-red-600/90 text-white font-mono text-[10px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1 shadow-md">
+                <span x-text="v.duration_seconds > 0 ? formatDuration(v.duration_seconds, true) : 'SHORTS'"></span>
+              </div>
+            </template>
+            <template x-if="!v.is_short && v.duration_seconds > 0">
+              <div class="absolute bottom-2 right-2 bg-black/80 text-white font-mono text-[11px] font-medium px-1.5 py-0.5 rounded-md">
+                <span x-text="formatDuration(v.duration_seconds, false)"></span>
+              </div>
+            </template>
+
+            <!-- Outlier Pill (Top-Left) -->
+            <template x-if="v.multiplier && v.multiplier >= 1.5">
+              <div 
+                :class="v.multiplier >= 3.0 ? 'bg-red-600/90 text-white' : 'bg-amber-500/90 text-black'"
+                class="absolute top-2 left-2 flex items-center gap-1 text-[11px] font-mono font-bold px-2 py-0.5 rounded-md shadow-lg backdrop-blur-sm">
+                <span>🔥</span>
+                <span x-text="`${v.multiplier.toFixed(1)}× Outlier`"></span>
+              </div>
+            </template>
+
+            <!-- Micro-Creator Breakout Gem Pill (Bottom-Left) -->
+            <template x-if="v.is_micro_outlier">
+              <div class="absolute bottom-2 left-2 bg-purple-600/90 text-white font-mono text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 shadow-md border border-purple-400/40 backdrop-blur-sm">
+                <span>💎</span>
+                <span>Breakout Gem</span>
+              </div>
+            </template>
+
+            <!-- Category Pill (Top-Right) -->
+            <div class="absolute top-2 right-2 bg-black/70 backdrop-blur-md text-yt-muted text-[10px] font-medium px-2 py-0.5 rounded-md border border-white/10">
+              <span x-text="v.channel_category || v.outlier_category || 'Tech'"></span>
+            </div>
+          </div>
+
+          <!-- Video Details (Avatar + Title + Meta) -->
+          <div class="flex gap-3 pt-3">
+            
+            <!-- Channel Avatar -->
+            <div class="shrink-0">
+              <div class="w-9 h-9 rounded-full bg-yt-surface border border-yt-border flex items-center justify-center font-bold text-xs text-white overflow-hidden">
+                <template x-if="v.channel_avatar">
+                  <img :src="v.channel_avatar" class="w-full h-full object-cover" onerror="this.style.display='none'">
+                </template>
+                <span x-text="v.channel_name ? v.channel_name.slice(0, 2).toUpperCase() : 'AI'"></span>
+              </div>
+            </div>
+
+            <!-- Text Content -->
+            <div class="flex-1 min-w-0">
+              <!-- Title -->
+              <h3 class="text-sm font-semibold text-yt-text group-hover:text-white line-clamp-2 leading-tight" x-text="v.title"></h3>
+
+              <!-- Channel Name with Verified Checkmark & Region Badge -->
+              <div class="flex items-center gap-1 text-xs text-yt-muted pt-1 hover:text-white">
+                <span x-text="v.channel_name"></span>
+                <svg class="w-3.5 h-3.5 text-yt-muted fill-current" viewBox="0 0 24 24"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zM9.8 17.3l-4.2-4.1 1.4-1.4 2.8 2.7 7.4-7.4 1.4 1.4-8.8 8.8z"/></svg>
+                <span class="ml-1 text-[9px] font-bold px-1.5 py-0.2 rounded bg-yt-surface border border-white/10 text-yt-muted font-mono" x-text="v.channel_country || 'US'"></span>
+              </div>
+
+              <!-- Views • Published Time -->
+              <div class="flex items-center gap-1 text-xs text-yt-muted font-normal pt-0.5">
+                <span x-text="`${formatNumber(v.view_count)} views`"></span>
+                <span>•</span>
+                <span x-text="formatRelativeTime(v.published_at)"></span>
+              </div>
+
+              <!-- Outlier Stat Comparison -->
+              <div class="flex items-center gap-1.5 text-[11px] font-mono text-amber-400/90 pt-0.5">
+                <span x-text="`${v.multiplier ? v.multiplier.toFixed(1) : '1.0'}× channel median`"></span>
+                <span class="text-yt-muted">•</span>
+                <span class="text-yt-muted" x-text="`${formatNumber(v.channel_median || 15000)} med`"></span>
+              </div>
+
+              <!-- Collab / Guest Creator Badge -->
+              <template x-if="v.collab">
+                <div class="mt-2 flex items-center gap-1.5 text-[11px] bg-yt-surface border border-yt-border/80 rounded-md px-2 py-0.5 w-fit" @click.stop>
+                  <span class="text-amber-400">🤝</span>
+                  <span class="text-yt-muted">Collab:</span>
+                  <span class="font-semibold text-white truncate max-w-[120px]" x-text="v.collab.guest_name"></span>
+                  <template x-if="v.collab.is_tracked">
+                    <span 
+                      @click="filterByCreator(v.collab.guest_name)" 
+                      class="text-blue-400 hover:underline cursor-pointer font-mono text-[10px] ml-0.5 font-bold">
+                      [Filter]
+                    </span>
+                  </template>
+                  <template x-if="!v.collab.is_tracked">
+                    <button 
+                      @click="addCollabCreator(v.collab)" 
+                      :disabled="collabAdding"
+                      class="text-emerald-400 hover:text-emerald-300 font-bold font-mono text-[10px] ml-0.5 bg-emerald-950/60 px-1.5 py-0.2 rounded border border-emerald-500/40">
+                      [+ Track]
+                    </button>
+                  </template>
+                </div>
+              </template>
+            </div>
+
+          </div>
+
+        </div>
+      </template>
+    </div>
+
+  </main>
+
+  <!-- YouTube-Style Reproduction Blueprint Modal -->
+  <div 
+    x-show="activeBlueprint" 
+    x-cloak 
+    class="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+    
+    <div 
+      @click.away="activeBlueprint = null"
+      class="bg-yt-surface border border-yt-border rounded-3xl max-w-2xl w-full overflow-hidden shadow-2xl relative text-left">
+      
+      <!-- Modal Header -->
+      <div class="p-6 border-b border-yt-border flex items-start justify-between gap-4">
+        <div>
+          <div class="flex items-center gap-2 mb-2 font-mono text-xs">
+            <span class="font-bold px-2.5 py-1 rounded-lg bg-red-600/20 text-red-400 border border-red-500/30" x-text="`${activeBlueprint?.multiplier?.toFixed(1)}× Outlier`"></span>
+            <span class="text-yt-muted" x-text="activeBlueprint?.channel_name"></span>
+            <span class="text-yt-border">•</span>
+            <span class="text-yt-muted" x-text="`${formatNumber(activeBlueprint?.view_count)} views vs ${formatNumber(activeBlueprint?.channel_median)} median`"></span>
+          </div>
+          <h2 class="text-base font-bold text-white leading-snug" x-text="activeBlueprint?.title"></h2>
+        </div>
+        <button @click="activeBlueprint = null" class="text-yt-muted hover:text-white p-2 rounded-full hover:bg-yt-hover">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Modal Body -->
+      <div class="p-6 space-y-6 max-h-[70vh] overflow-y-auto">
+        
+        <!-- Viral Hook Breakdown Box -->
+        <div class="bg-yt-input border border-yt-border rounded-2xl p-5 space-y-2">
+          <div class="flex items-center gap-2 text-amber-400 font-bold text-xs uppercase tracking-wider">
+            <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            <span>Viral Hook & Reproduction Angle</span>
+          </div>
+          <p class="text-xs text-yt-text leading-relaxed font-sans" x-text="activeBlueprint?.viral_hook_angle || 'Analysis in progress with Groq...'"></p>
+        </div>
+
+        <!-- Guest & Collaborator Intelligence Panel -->
+        <template x-if="activeBlueprint?.collab">
+          <div class="bg-yt-input border border-yt-border rounded-2xl p-4 space-y-2">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <span class="text-base">🤝</span>
+                <span class="text-xs font-bold uppercase tracking-wider text-amber-400">Featured Collaborator</span>
+              </div>
+              <template x-if="activeBlueprint.collab.is_tracked">
+                <span class="px-2.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-950/80 text-emerald-400 border border-emerald-500/40">
+                  ✓ Tracked in Radar
+                </span>
+              </template>
+              <template x-if="!activeBlueprint.collab.is_tracked">
+                <button 
+                  @click="addCollabCreator(activeBlueprint.collab)" 
+                  :disabled="collabAdding"
+                  class="px-3 py-1 rounded text-xs font-bold bg-emerald-500 hover:bg-emerald-400 text-black transition flex items-center gap-1">
+                  <span>+ Track Channel</span>
+                </button>
+              </template>
+            </div>
+            <div class="flex items-center gap-2 text-xs pt-1">
+              <span class="text-white font-semibold text-sm" x-text="activeBlueprint.collab.guest_name"></span>
+              <span class="font-mono text-blue-400" x-text="activeBlueprint.collab.guest_handle"></span>
+              <template x-if="activeBlueprint.collab.is_tracked">
+                <button 
+                  @click="const gname = activeBlueprint.collab.guest_name; activeBlueprint = null; filterByCreator(gname)"
+                  class="text-[11px] text-yt-muted hover:text-white underline ml-auto">
+                  View creator videos →
+                </button>
+              </template>
+            </div>
+          </div>
+        </template>
+
+        <!-- 3-Bullet Technical Breakdown -->
+        <div class="space-y-3">
+          <h3 class="text-xs font-mono uppercase tracking-wider text-yt-muted font-bold">Key Technical Insights</h3>
+          <ul class="space-y-2">
+            <template x-for="(bullet, idx) in activeBlueprint?.summary_bullets || []" :key="idx">
+              <li class="bg-yt-input border border-yt-inputBorder rounded-xl p-3 text-xs text-yt-text leading-relaxed flex items-start gap-2.5">
+                <span class="w-4 h-4 rounded-full bg-red-600/20 text-red-400 flex items-center justify-center font-bold text-[10px] shrink-0" x-text="idx+1"></span>
+                <span x-text="bullet"></span>
+              </li>
+            </template>
+          </ul>
+        </div>
+
+        <!-- Tools & Repositories Mentioned -->
+        <div class="space-y-2">
+          <h3 class="text-xs font-mono uppercase tracking-wider text-yt-muted font-bold">Tools & Repositories</h3>
+          <div class="flex flex-wrap gap-2">
+            <template x-for="tool in activeBlueprint?.tools_mentioned || []" :key="tool">
+              <span class="text-xs font-mono bg-yt-input text-blue-400 border border-yt-inputBorder px-3 py-1 rounded-lg" x-text="tool"></span>
+            </template>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="p-4 border-t border-yt-border flex items-center justify-between bg-yt-input">
+        <button 
+          @click="reanalyze(activeBlueprint?.video_id)" 
+          class="text-xs text-yt-muted hover:text-white flex items-center gap-1.5 font-medium px-3 py-2 rounded-lg hover:bg-yt-surface">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+          <span>Regenerate Blueprint</span>
+        </button>
+
+        <a 
+          :href="activeBlueprint?.video_url" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          class="text-xs font-bold px-5 py-2.5 rounded-full bg-yt-red hover:bg-red-700 text-white transition flex items-center gap-2 shadow-md">
+          <span>Watch on YouTube</span>
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+        </a>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Raw Data Inspector Modal (Data Transparency) -->
+  <div 
+    x-show="showRawModal" 
+    x-cloak 
+    class="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+    
+    <div 
+      @click.away="showRawModal = false"
+      class="bg-yt-surface border border-yt-border rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl relative text-left">
+      
+      <div class="p-6 border-b border-yt-border flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-bold text-white flex items-center gap-2">
+            <span>🗄️ SQLite Database Inspector</span>
+            <span class="text-xs font-mono font-normal text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-md">Live & Transparent</span>
+          </h2>
+          <p class="text-xs font-mono text-yt-muted mt-1" x-text="`Location: ${rawStats.db_path || 'data/radar.db'}`"></p>
+        </div>
+        <button @click="showRawModal = false" class="text-yt-muted hover:text-white p-2 rounded-full hover:bg-yt-hover">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Database Summary Stats -->
+      <div class="grid grid-cols-3 gap-4 p-6 border-b border-yt-border bg-yt-input">
+        <div class="bg-yt-surface p-3 rounded-xl border border-yt-inputBorder">
+          <span class="text-[10px] uppercase font-mono text-yt-muted">Tracked Creators</span>
+          <div class="text-lg font-bold text-white" x-text="rawChannels.length"></div>
+        </div>
+        <div class="bg-yt-surface p-3 rounded-xl border border-yt-inputBorder">
+          <span class="text-[10px] uppercase font-mono text-yt-muted">Recency Cutoff</span>
+          <div class="text-lg font-bold text-amber-400">Strictly ≤ 15 Days</div>
+        </div>
+        <div class="bg-yt-surface p-3 rounded-xl border border-yt-inputBorder">
+          <span class="text-[10px] uppercase font-mono text-yt-muted">Feed Limit</span>
+          <div class="text-lg font-bold text-blue-400">50 High-Signal Videos</div>
+        </div>
+      </div>
+
+      <!-- Raw Channels Table -->
+      <div class="p-6 max-h-[50vh] overflow-y-auto">
+        <table class="w-full text-left text-xs font-mono">
+          <thead class="text-yt-muted border-b border-yt-border sticky top-0 bg-yt-surface">
+            <tr>
+              <th class="pb-2">Creator Name</th>
+              <th class="pb-2">Category</th>
+              <th class="pb-2">Handle</th>
+              <th class="pb-2 text-right">Median Views</th>
+              <th class="pb-2 text-right">Videos in DB</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-yt-border/40 text-yt-text">
+            <template x-for="ch in rawChannels" :key="ch.channel_id">
+              <tr class="hover:bg-yt-hover transition">
+                <td class="py-2 font-bold text-white" x-text="ch.name"></td>
+                <td class="py-2 text-yt-muted" x-text="ch.category || 'Tech Discovery'"></td>
+                <td class="py-2 text-blue-400" x-text="ch.handle"></td>
+                <td class="py-2 text-right font-bold text-amber-400" x-text="formatNumber(ch.median_views)"></td>
+                <td class="py-2 text-right text-yt-muted" x-text="ch.video_count || 0"></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Channel Manager Modal -->
+  <div 
+    x-show="showChannelModal" 
+    x-cloak 
+    class="fixed inset-0 z-50 overflow-y-auto bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+    
+    <div 
+      @click.away="showChannelModal = false"
+      class="bg-yt-surface border border-yt-border rounded-3xl max-w-xl w-full overflow-hidden shadow-2xl relative text-left">
+      
+      <div class="p-6 border-b border-yt-border flex items-center justify-between">
+        <div>
+          <h2 class="text-base font-bold text-white">Creator Catalog (<span x-text="channels.length"></span> Channels)</h2>
+          <p class="text-xs text-yt-muted">Manage and search YouTube channels monitored for outliers</p>
+        </div>
+        <button @click="showChannelModal = false" class="text-yt-muted hover:text-white p-2 rounded-full hover:bg-yt-hover">
+          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Search & Add Channel Input -->
+      <div class="p-6 border-b border-yt-border bg-yt-input space-y-2.5">
+        <div class="flex gap-2">
+          <div class="relative flex-1">
+            <input 
+              type="text" 
+              x-model="channelSearchQuery" 
+              @keydown.enter="if (filteredChannels().length === 0) addChannel()"
+              placeholder="Search or add channel (e.g. AI Jason, @nateherk, Fireship)..." 
+              class="w-full bg-yt-surface border border-yt-inputBorder rounded-xl pl-9 pr-8 py-2 text-xs text-white placeholder-yt-muted focus:outline-none focus:border-red-500">
+            <!-- Search Icon -->
+            <svg class="w-4 h-4 text-yt-muted absolute left-3 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            <!-- Clear Search Button -->
+            <template x-if="channelSearchQuery">
+              <button @click="channelSearchQuery = ''" class="absolute right-2.5 top-2.5 text-yt-muted hover:text-white">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </template>
+          </div>
+          <button 
+            @click="addChannel()" 
+            :disabled="addingChannel || !channelSearchQuery.trim()"
+            class="px-4 py-2 rounded-xl bg-yt-red hover:bg-red-700 text-white font-semibold text-xs transition disabled:opacity-40 disabled:cursor-not-allowed shrink-0 flex items-center gap-1.5 shadow-sm">
+            <span x-text="addingChannel ? 'Adding...' : '+ Add Channel'"></span>
+          </button>
+        </div>
+
+        <!-- Filter Count & Status Bar -->
+        <div class="flex items-center justify-between text-[11px] font-mono text-yt-muted px-1">
+          <span x-text="channelSearchQuery ? `Showing ${filteredChannels().length} of ${channels.length} channels` : `Total ${channels.length} monitored creators`"></span>
+          <template x-if="channelSearchQuery && filteredChannels().length === 0">
+            <span class="text-amber-400 font-sans text-[11px]">Not yet in catalog — click "+ Add Channel"</span>
+          </template>
+        </div>
+      </div>
+
+      <!-- Channels List (Real-time Filtered) -->
+      <div class="p-6 max-h-[50vh] overflow-y-auto divide-y divide-yt-border/40">
+        <template x-for="ch in filteredChannels()" :key="ch.channel_id">
+          <div class="py-2.5 flex items-center justify-between gap-3 group hover:bg-yt-surface/40 px-2 rounded-xl transition">
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-9 h-9 rounded-full bg-yt-hover flex items-center justify-center font-bold text-xs text-amber-400 shrink-0 border border-yt-border/50 overflow-hidden">
+                <template x-if="ch.avatar_url">
+                  <img :src="ch.avatar_url" class="w-full h-full object-cover" onerror="this.style.display='none'">
+                </template>
+                <span x-text="ch.name ? ch.name.slice(0, 2).toUpperCase() : 'AI'"></span>
+              </div>
+              <div class="min-w-0">
+                <div class="flex items-center gap-1.5">
+                  <span class="text-xs font-bold text-white truncate" x-text="ch.name"></span>
+                  <span class="text-[10px] font-mono text-blue-400" x-text="ch.handle"></span>
+                </div>
+                <div class="flex items-center gap-2 text-[10px] font-mono text-yt-muted">
+                  <span class="px-1.5 py-0.5 rounded bg-yt-surface text-[10px]" x-text="ch.category || 'Tech Discovery'"></span>
+                  <span>•</span>
+                  <span x-text="`${formatNumber(ch.median_views)} median`"></span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="flex items-center gap-2 shrink-0">
+              <button 
+                @click="filterByCreator(ch.name); showChannelModal = false" 
+                title="View Videos in Radar"
+                class="text-xs text-yt-muted hover:text-white px-2.5 py-1 rounded-lg bg-yt-surface hover:bg-yt-hover border border-yt-border/40 transition">
+                Videos
+              </button>
+              <button 
+                @click="deleteChannel(ch.channel_id)" 
+                title="Remove Channel"
+                class="text-yt-muted hover:text-red-400 p-1.5 rounded-lg hover:bg-yt-hover transition">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+              </button>
+            </div>
+          </div>
+        </template>
+
+        <!-- Empty state when no channels match search query -->
+        <template x-if="filteredChannels().length === 0">
+          <div class="text-center py-10 space-y-3">
+            <div class="text-3xl">🔍</div>
+            <p class="text-xs text-yt-muted" x-text="`No tracked creator matches '${channelSearchQuery}'`"></p>
+            <button 
+              @click="addChannel()" 
+              :disabled="addingChannel"
+              class="px-4 py-2 rounded-xl bg-yt-red hover:bg-red-700 text-white font-semibold text-xs transition shadow-md">
+              <span x-text="addingChannel ? 'Adding...' : `+ Add '${channelSearchQuery}' to Radar`"></span>
+            </button>
+          </div>
+        </template>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
