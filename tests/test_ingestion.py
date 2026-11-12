@@ -296,7 +296,9 @@ def test_whisper_audio_fallback_when_captions_fail(monkeypatch):
     Simulates YouTube caption failure (e.g. TranscriptsDisabled or IpBlocked)
     and asserts complete fallback to yt-dlp audio stream + ffmpeg + Groq Whisper.
     """
-    monkeypatch.setattr(config, "GROQ_API_KEY", "gsk_test_key_mock_1234567890")
+    # radar/transcript.py binds GROQ_API_KEY at import time, so the consumer
+    # module must be patched (same pattern as the radar.analyzer tests).
+    monkeypatch.setattr("radar.transcript.GROQ_API_KEY", "gsk_test_key_mock_1234567890")
     test_vid = "vid_blocked_captions_789"
     expected_whisper_text = "Welcome to this episode. Today we build autonomous AI agents using graphs and models."
 
